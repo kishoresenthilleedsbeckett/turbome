@@ -1,82 +1,156 @@
-#
-# PyCharm Community turbo.me file
-# https://github.com/turboapps/turbome/tree/master/pycharm]
-#
-# Created with Turbo CMD version 1.4.1085.0
-#
-# Licensed under the Apache License, Version 2.0
-# http://www.apache.org/licenses/LICENSE-2.0
+import sys
 
-###################################
-# Meta tags
-###################################
+def process_file(file_name):
+    """
+    Process the input file to extract the Grand Prix location and lap times for each driver.
 
-meta title="PyCharm Community"
-meta namespace="jetbrains"
-meta name="pycharm"
+    Args:
+    file_name (str): The name of the file containing lap times.
 
-###################################
-# Pull dependency images
-###################################
+    Returns:
+    tuple: The location of the Grand Prix and a dictionary of driver lap times.
+    """
+    try:
+        with open(file_name, 'r') as file:
+            # Read all lines from the file
+            lines = file.readlines()
 
-using turbo/turboscript-tools:2016.8.31
+            if not lines:
+                raise ValueError("The file is empty.")
 
-###################################
-# Download and install
-###################################
+            # The first line of the file is the location of the Grand Prix
+            location = lines[0].strip()
 
-# Set working directory
-cmd mkdir c:\Workspace
-workdir c:\Workspace
+            # Dictionary to store lap times for each driver
+            driver_times = {}
 
-# Download
-batch cmd
-    echo import requests > getLink.py
-    echo headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; WOW64; rv:41.0) Gecko/20100101 Firefox/41.0'} >> getLink.py
-    echo response = requests.get("https://data.services.jetbrains.com/products/releases?code=PCC&latest=true&type=release", headers=headers, timeout=10) >> getLink.py
-    echo response.raise_for_status() >> getLink.py
-    echo json = response.json() >> getLink.py
-    echo print(json['PCC'][0]['downloads']['windows']['link']) >> getLink.py
-cmd python getLink.py
-var url = last
+            # Process each driver's lap time entry
+            for line in lines[1:]:
+                if len(line) < 4:
+                    continue  # Skip malformed lines
+                # First three characters are the driver's code
+                driver_code = line[:3]
+                try:
+                    # The rest is the lap time
+                    lap_time = float(line[3:].strip())
+                except ValueError:
+                    print(f"Warning: Invalid lap time '{line[3:].strip()}' for driver {driver_code}. Skipping entry.")
+                    continue
 
-cmd "wget --no-check-certificate --quiet -Opycharm.exe ""%url%"""
+                # Append the lap time to the driver's list of times
+                if driver_code in driver_times:
+                    driver_times[driver_code].append(lap_time)
+                else:
+                    # Create a new entry for this driver
+                    driver_times[driver_code] = [lap_time]
 
-# Install
-cmd pycharm.exe /S
-cmd dir "c:\Program Files (x86)\JetBrains" /b > image.txt
-cmd findstr "." image.txt
-var installDir = "c:\Program Files (x86)\JetBrains\" + last
-var exePath = installDir + "\bin\pycharm64.exe"
+            return location, driver_times
 
-# Get product version
-cmd powershell -ExecutionPolicy Unrestricted -NoProfile -Command "Import-Module Turbo; Get-FileVersion ""%exePath%"""
-var version = last
+    except FileNotFoundError:
+        print(f"Error: The file '{file_name}' was not found.")
+        sys.exit(1)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
 
-###################################
-# Clean up
-###################################
+def calculate_stats(driver_times):
+    """
+    Calculate statistics from the lap times for each driver.
 
-cmd powershell -ExecutionPolicy Unrestricted -NoProfile -Command "Import-Module Turbo; Remove-BuildTools"
+    Args:
+    driver_times (dict): A dictionary containing driver lap times.
 
-workdir c:\
-cmd rmdir c:\Workspace /s /q
-cmd rmdir c:\TurboBuildTools /s /q
+    Returns:
+    tuple: The fastest driver, fastest lap time, overall average lap time, and driver statistics.
+    """
+    fastest_driver = None
+    fastest_time = float('inf')  # Initialize to infinity for comparison
 
-###################################
-# Environment Variables
-###################################
+    total_time = 0  # Cumulative total lap time for all drivers
+    total_laps = 0  # Cumulative total number of laps for all drivers
+    driver_stats = {}
 
-env pythonhome=""
+    # Process each driver's lap times to calculate statistics
+    for driver, times in driver_times.items():
+        if not times:
+            continue  # Skip drivers with no lap times
+        best_time = min(times)  # Fastest time for this driver
+        average_time = sum(times) / len(times)  # Average time for this driver
 
-###################################
-# Version
-###################################
+        # Update the fastest driver and time
+        if best_time < fastest_time:
+            fastest_time = best_time
+            fastest_driver = driver
 
-meta tag=version
+        # Update overall time and lap count for average calculation
+        total_time += sum(times)
+        total_laps += len(times)
 
-###################################
-# Startup File
-###################################
+        # Store the stats for each driver
+        driver_stats[driver] = {
+            'best_time': best_time,
+            'average_time': average_time
+        }
 
-startup file (exePath)
+    # Calculate the overall average time for all drivers
+    overall_average_time = total_time / total_laps if total_laps > 0 else 0
+
+    return fastest_driver, fastest_time, overall_average_time, driver_stats
+
+def display_results(location, fastest_driver, fastest_time, overall_average_time, driver_stats):
+    """
+    Display the results of the Grand Prix, including fastest lap times and driver statistics.
+
+    Args:
+    location (str): The location of the Grand Prix.
+    fastest_driver (str): The code of the driver with the fastest lap time.
+    fastest_time (float): The fastest lap time.
+    overall_average_time (float): The overall average lap time for all drivers.
+    driver_stats (dict): A dictionary containing statistics for each driver.
+    """
+    print(f"Grand Prix: {location}\n")
+
+    # Print the fastest lap time and the driver
+    if fastest_driver and fastest_time < float('inf'):
+        print(f"Fastest Lap Time: {fastest_driver} - {fastest_time:.3f} seconds\n")
+    else:
+        print("No valid lap times found for the fastest lap.\n")
+
+    # Print the overall average time
+    print(f"Overall Average Time: {overall_average_time:.3f} seconds\n")
+
+    # Display stats for each driver
+    print("Driver Stats:")
+    for driver, stats in driver_stats.items():
+        print(f"{driver}:")
+        print(f"  Fastest Lap: {stats['best_time']:.3f} seconds")
+        print(f"  Average Lap Time: {stats['average_time']:.3f} seconds\n")
+
+    # Display the fastest lap times in descending order
+    print("Fastest Laps (Descending Order):")
+    sorted_drivers = sorted(driver_stats.items(), key=lambda x: x[1]['best_time'])
+    for driver, stats in sorted_drivers:
+        print(f"{driver} - {stats['best_time']:.3f} seconds")
+
+def main():
+    """
+    Main function to handle the program execution.
+    """
+    if len(sys.argv) != 2:
+        print("Usage: python script.py <file_name>")
+        sys.exit(1)
+
+    file_name = sys.argv[1]
+
+    # Process the file and calculate stats
+    location, driver_times = process_file(file_name)
+    fastest_driver, fastest_time, overall_average_time, driver_stats = calculate_stats(driver_times)
+
+    # Display the results
+    display_results(location, fastest_driver, fastest_time, overall_average_time, driver_stats)
+
+if __name__ == "__main__":
+    main()
